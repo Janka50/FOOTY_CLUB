@@ -36,8 +36,13 @@ const getAllNews = asyncHandler(async (req, res) => {
     where.newsType = newsType;
   }
 
+  // Fix: Only add author filter if it's a valid UUID
   if (author) {
-    where.authorId = author;
+    // Validate UUID format
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(author)) {
+      where.authorId = author;
+    }
   }
 
   if (search) {
@@ -93,7 +98,9 @@ const getAllNews = asyncHandler(async (req, res) => {
     }, 'News retrieved successfully')
   );
 });
-
+ /** Get single news article by slug or ID
+ * GET /api/news/:identifier (slug or id)
+ **/
 /**
  * Get single news article by slug or ID
  * GET /api/news/:identifier (slug or id)
@@ -101,63 +108,109 @@ const getAllNews = asyncHandler(async (req, res) => {
 const getNewsById = asyncHandler(async (req, res) => {
   const { identifier } = req.params;
 
+  // Check if identifier is a number (ID) or string (slug)
   const isId = !isNaN(identifier);
+  let news;
 
-  // ✅ FIX: force numeric ID
-  const where = isId
-    ? { id: Number(identifier) }
-    : { slug: identifier };
-
-  where.isPublished = true;
-
-  const news = await News.findOne({
-    where,
-    include: [
-      {
-        model: NewsSource,
-        as: 'source',
-        attributes: ['id', 'name', 'sourceType', 'logoUrl', 'url']
+  if (isId) {
+    // Query by ID (integer)
+    news = await News.findByPk(identifier, {
+      where: { isPublished: true },
+      include: [
+        {
+          model: NewsSource,
+          as: 'source',
+          attributes: ['id', 'name', 'sourceType', 'logoUrl', 'url']
+        },
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'username', 'fullName', 'avatarUrl', 'bio']
+        },
+        {
+          model: Team,
+          as: 'relatedTeams',
+          attributes: ['id', 'name', 'shortName', 'logoUrl'],
+          through: { attributes: [] }
+        },
+        {
+          model: Comment,
+          as: 'comments',
+          separate:true,
+          where: { isDeleted: false, parentCommentId: null },
+          required: false,
+          limit: 5,
+          order: [['created_at', 'DESC']],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'username', 'avatarUrl']
+            }
+          ]
+        }
+      ]
+    });
+  } else {
+    // Query by slug (string)
+    news = await News.findOne({
+      where: { 
+        slug: identifier,
+        isPublished: true 
       },
-      {
-        model: User,
-        as: 'author',
-        attributes: ['id', 'username', 'fullName', 'avatarUrl', 'bio']
-      },
-      {
-        model: Team,
-        as: 'relatedTeams',
-        attributes: ['id', 'name', 'shortName', 'logoUrl'],
-        through: { attributes: [] }
-      },
-      {
-        model: Comment,
-        as: 'comments',
-        where: { isDeleted: false, parentCommentId: null },
-        required: false,
-        limit: 5,
-        order: [['createdAt', 'DESC']],
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'username', 'avatarUrl']
-          }
-        ]
-      }
-    ]
-  });
+      include: [
+        {
+          model: NewsSource,
+          as: 'source',
+          attributes: ['id', 'name', 'sourceType', 'logoUrl', 'url']
+        },
+        {
+          model: User,
+          as: 'author',
+          attributes: ['id', 'username', 'fullName', 'avatarUrl', 'bio']
+        },
+        {
+          model: Team,
+          as: 'relatedTeams',
+          attributes: ['id', 'name', 'shortName', 'logoUrl'],
+          through: { attributes: [] }
+        },
+        {
+          model: Comment,
+          as: 'comments',
+          separate: true,
+          where: { isDeleted: false, parentCommentId: null },
+          required: false,
+          limit: 5,
+          order: [['created_at', 'DESC']],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'username', 'avatarUrl']
+            }
+          ]
+        }
+      ]
+    });
+  }
 
   if (!news) {
     throw ApiError.notFound('News article not found');
   }
 
+  // Check if published
+  if (!news.isPublished && req.user?.id !== news.authorId && req.user?.accountType !== 'admin') {
+    throw ApiError.notFound('News article not found');
+  }
+
+  // Increment view count
   await news.increment('viewCount');
 
   res.status(200).json(
     new ApiResponse(200, news, 'News article retrieved successfully')
   );
 });
-
 /**
  * Create new news article
  * POST /api/news
