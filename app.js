@@ -63,6 +63,7 @@ app.use('/api/leagues', require('./src/Routes/leagueRoutes'));
 app.use('/api/teams', require('./src/Routes/teamRoutes'));
 app.use('/api/matches', require('./src/Routes/matchRoutes'));
 app.use('/api/news', require('./src/Routes/newsRoutes'));
+app.use('/api', require('./src/Routes/commentRoutes')); 
 
 
 // ERROR HANDLING

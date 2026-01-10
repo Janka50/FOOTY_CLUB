@@ -73,7 +73,7 @@ Team.belongsToMany(News, {
 
 
 // News <-> Comment (One-to-Many)
-News.hasMany(Comment, { foreignKey: 'newsId', as: 'comments', onDelete: 'CASCADE' });
+News.hasMany(Comment, { foreignKey: 'newsId', as: 'comments', onDelete: 'CASCADE', constraints: false });
 Comment.belongsTo(News, { foreignKey: 'newsId', as: 'news' });
 
 // User <-> Comment (One-to-Many)
