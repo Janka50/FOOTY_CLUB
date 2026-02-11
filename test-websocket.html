@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test - Football News</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .events {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .event {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-left: 4px solid #007bff;
+            border-radius: 3px;
+        }
+        .event-time {
+            color: #666;
+            font-size: 0.9em;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚽ Live Match Updates Test</h1>
+        
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+
+        <div class="controls">
+            <h3>Join Match Room</h3>
+            <input type="number" id="matchId" placeholder="Match ID" value="3">
+            <button onclick="joinMatch()">Join Match</button>
+            <button onclick="leaveMatch()">Leave Match</button>
+        </div>
+
+        <div class="events">
+            <h3>Live Events</h3>
+            <div id="events"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket;
+        let currentMatchId = null;
+
+        // Connect to WebSocket
+        function connect() {
+            socket = io('http://localhost:5000', {
+                path: '/socket.io/',
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                console.log('Connected:', socket.id);
+                updateStatus(true);
+                addEvent('info', 'Connected to server');
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Disconnected');
+                updateStatus(false);
+                addEvent('error', 'Disconnected from server');
+            });
+
+            socket.on('joined_match', (data) => {
+                console.log('Joined match:', data);
+                addEvent('success', `Joined match ${data.matchId}`);
+            });
+
+            socket.on('match_update', (data) => {
+                console.log('Match update:', data);
+                handleMatchUpdate(data);
+            });
+
+            socket.on('error', (error) => {
+                console.error('Socket error:', error);
+                addEvent('error', `Error: ${error.message}`);
+            });
+        }
+
+        function updateStatus(connected) {
+            const status = document.getElementById('status');
+            status.className = `status ${connected ? 'connected' : 'disconnected'}`;
+            status.textContent = connected ? 'Connected ✓' : 'Disconnected ✗';
+        }
+
+        function joinMatch() {
+            const matchId = document.getElementById('matchId').value;
+            if (matchId) {
+                socket.emit('join_match', parseInt(matchId));
+                currentMatchId = parseInt(matchId);
+            }
+        }
+
+        function leaveMatch() {
+            if (currentMatchId) {
+                socket.emit('leave_match', currentMatchId);
+                addEvent('info', `Left match ${currentMatchId}`);
+                currentMatchId = null;
+            }
+        }
+
+        function handleMatchUpdate(data) {
+            const { eventType, data: eventData } = data;
+            
+            switch(eventType) {
+                case 'score_update':
+                    addEvent('goal', `⚽ GOAL! Score: ${eventData.homeScore} - ${eventData.awayScore}`);
+                    break;
+                case 'match_event':
+                    addEvent('event', `${eventData.eventType.toUpperCase()} at ${eventData.minute}'`);
+                    break;
+                case 'status_change':
+                    addEvent('status', `Match status: ${eventData.status}`);
+                    break;
+                default:
+                    addEvent('info', JSON.stringify(data));
+            }
+        }
+
+        function addEvent(type, message) {
+            const events = document.getElementById('events');
+            const event = document.createElement('div');
+            event.className = 'event';
+            
+            const time = new Date().toLocaleTimeString();
+            event.innerHTML = `
+                <div class="event-time">${time}</div>
+                <strong>${type.toUpperCase()}:</strong> ${message}
+            `;
+            
+            events.insertBefore(event, events.firstChild);
+        }
+
+        // Connect on page load
+        connect();
+    </script>
+</body>
+</html>

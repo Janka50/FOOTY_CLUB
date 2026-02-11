@@ -59,6 +59,7 @@ const League = sequelize.define('League', {
     { fields: ['league_type'] },
     { fields: ['is_active'] }
   ]
+  
 });
 
 module.exports = League;

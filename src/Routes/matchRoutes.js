@@ -1,9 +1,9 @@
-console.log('matchRoutes loaded');
+
 const express = require('express');
 const { body, param, query } = require('express-validator');
 const validate = require('../Middlewares/validation');
 const { authenticate, authorize } = require('../Middlewares/auth');
-const {
+module.exports = {
   getMatches,
   getMatchById,
   createMatch,
@@ -11,8 +11,16 @@ const {
   deleteMatch,
   getLiveMatches,
   getUpcomingMatches,
-  addMatchEvent
+  addMatchEvent,
+  getTeamMatches
 } = require('../Controllers/matchController');
+console.log('matchRoutes loaded');
+console.log({
+  updateMatch,
+  addMatchEvent,
+  getTeamMatches,
+});
+
 
 const router = express.Router();
 
@@ -21,7 +29,7 @@ const router = express.Router();
  * @desc    Get live matches
  * @access  Public
  */
-router.get('/live', getLiveMatches);
+//router.get('/live', getLiveMatches);
 
 /**
  * @route   GET /api/matches/upcoming

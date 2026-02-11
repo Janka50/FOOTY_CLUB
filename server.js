@@ -1,6 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { testConnection } = require('./src/config/database');
+const { initializeSocket } = require('./src/websocket/socket');
 const logger = require('./src/Utils/logger');
 
 const PORT = process.env.PORT || 5000;
@@ -22,7 +23,8 @@ const startServer = async () => {
       logger.info(`Health check: http://localhost:${PORT}/health`);
       logger.info(`API base URL: http://localhost:${PORT}/api`);
     });
-
+      // Initialize WebSocket
+    initializeSocket(server);
     // Graceful shutdown
     const gracefulShutdown = (signal) => {
       logger.info(`${signal} received. Closing server gracefully...`);
