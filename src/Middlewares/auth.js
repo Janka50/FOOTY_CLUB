@@ -1,64 +1,39 @@
 const jwt = require('jsonwebtoken');
 const ApiError = require('../Utils/ApiError');
 const asyncHandler = require('../Utils/asyncHandler');
-const { User, Session } = require('../models');
+const { User } = require('../models');
 
 /**
- * Verify JWT token and attach user to request
+ * Verify JWT access token and attach user to request
  */
 const authenticate = asyncHandler(async (req, res, next) => {
-  // Get token from header
   const authHeader = req.headers.authorization;
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw ApiError.unauthorized('Access token is required');
   }
 
   const token = authHeader.split(' ')[1];
 
+  let decoded;
   try {
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // Check if session exists and is valid
-    const session = await Session.findOne({
-      where: { token, userId: decoded.userId }
-    });
-
-    if (!session) {
-      throw ApiError.unauthorized('Invalid or expired token');
-    }
-
-    if (session.isExpired()) {
-      await session.destroy();
-      throw ApiError.unauthorized('Token has expired');
-    }
-
-    // Get user
-    const user = await User.findByPk(decoded.userId);
-
-    if (!user || !user.isActive) {
-      throw ApiError.unauthorized('User not found or inactive');
-    }
-
-    // Attach user to request
-    req.user = user;
-    req.session = session;
-    
-    next();
-  } catch (error) {
-    if (error instanceof jwt.JsonWebTokenError) {
-      throw ApiError.unauthorized('Invalid token');
-    }
-    if (error instanceof jwt.TokenExpiredError) {
-      throw ApiError.unauthorized('Token has expired');
-    }
-    throw error;
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (err) {
+    throw ApiError.unauthorized('Invalid or expired token');
   }
+
+  const user = await User.findByPk(decoded.userId);
+
+  if (!user || !user.isActive) {
+    throw ApiError.unauthorized('User not found or inactive');
+  }
+
+  req.user = user;
+  next();
 });
 
 /**
- * Check if user has required role
+ * Role-based authorization
  */
 const authorize = (...roles) => {
   return (req, res, next) => {
@@ -75,22 +50,28 @@ const authorize = (...roles) => {
 };
 
 /**
- * Optional authentication - attaches user if token is provided
- * but doesn't fail if token is missing
+ * Optional authentication
  */
 const optionalAuth = asyncHandler(async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      await authenticate(req, res, next);
-    } catch (error) {
-      // Continue without user if token is invalid
-      next();
-    }
-  } else {
-    next();
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
   }
+
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await User.findByPk(decoded.userId);
+    if (user && user.isActive) {
+      req.user = user;
+    }
+  } catch (err) {
+    // silently ignore
+  }
+
+  next();
 });
 
 module.exports = {

@@ -73,7 +73,7 @@ Team.belongsToMany(News, {
 
 
 // News <-> Comment (One-to-Many)
-News.hasMany(Comment, { foreignKey: 'newsId', as: 'comments', onDelete: 'CASCADE', constraints: false });
+News.hasMany(Comment, { foreignKey: 'newsId', as: 'comments', onDelete: 'CASCADE' });
 Comment.belongsTo(News, { foreignKey: 'newsId', as: 'news' });
 
 // User <-> Comment (One-to-Many)
@@ -81,8 +81,17 @@ User.hasMany(Comment, { foreignKey: 'userId', as: 'comments', onDelete: 'CASCADE
 Comment.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 // Comment <-> Comment (Self-referencing for nested comments)
-Comment.hasMany(Comment, { foreignKey: 'parentCommentId', as: 'replies', onDelete: 'CASCADE' });
-Comment.belongsTo(Comment, { foreignKey: 'parentCommentId', as: 'parentComment' });
+// Comment <-> Comment (Self-referencing for nested comments)
+Comment.hasMany(Comment, { 
+  foreignKey: 'parentCommentId', 
+  as: 'replies', 
+  onDelete: 'CASCADE' 
+});
+
+Comment.belongsTo(Comment, { 
+  foreignKey: 'parentCommentId', 
+  as: 'parentComment' 
+});
 
 
 // User <-> Team (Many-to-Many through user_favorites)

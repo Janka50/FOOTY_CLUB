@@ -2,7 +2,6 @@ const asyncHandler = require('../Utils/asyncHandler');
 const ApiError = require('../Utils/ApiError');
 const ApiResponse = require('../Utils/ApiResponse');
 const { Comment, User, News } = require('../models');
-const { sequelize } = require('../config/database');
 
 /**
  * Get comments for a news article
@@ -20,44 +19,54 @@ const getCommentsByNewsId = asyncHandler(async (req, res) => {
 
   const offset = (page - 1) * limit;
 
-  // Get top-level comments (no parent)
-  const { rows: comments, count } = await Comment.findAndCountAll({
+  // Get top-level comments only (no parent)
+  const comments = await Comment.findAll({
     where: {
-      newsId,
+      newsId: parseInt(newsId),
       parentCommentId: null,
       isDeleted: false
     },
     limit: parseInt(limit),
     offset: parseInt(offset),
-    separate: true,
     order: [['created_at', 'DESC']],
     include: [
       {
         model: User,
         as: 'user',
         attributes: ['id', 'username', 'fullName', 'avatarUrl', 'accountType']
-      },
-      {
-        model: Comment,
-        as: 'replies',
-        where: { isDeleted: false },
-        required: false,
-        limit: 3, // Show first 3 replies
-        order: [[sequelize.col('comments.created_at'), 'DESC']],
-        include: [
-          {
-            model: User,
-            as: 'user',
-            attributes: ['id', 'username', 'avatarUrl']
-          }
-        ]
       }
     ]
   });
 
+  // Count total top-level comments
+  const count = await Comment.count({
+    where: {
+      newsId: parseInt(newsId),
+      parentCommentId: null,
+      isDeleted: false
+    }
+  });
+
+  // Get reply count for each comment
+  const commentsWithReplies = await Promise.all(
+    comments.map(async (comment) => {
+      const replyCount = await Comment.count({
+        where: {
+          parentCommentId: comment.id,
+          isDeleted: false
+        }
+      });
+
+      return {
+        ...comment.toJSON(),
+        replyCount
+      };
+    })
+  );
+
   res.status(200).json(
     new ApiResponse(200, {
-      comments,
+      comments: commentsWithReplies,
       pagination: {
         total: count,
         page: parseInt(page),
@@ -84,9 +93,10 @@ const getCommentReplies = asyncHandler(async (req, res) => {
 
   const offset = (page - 1) * limit;
 
-  const { rows: replies, count } = await Comment.findAndCountAll({
+  // Get replies
+  const replies = await Comment.findAll({
     where: {
-      parentCommentId: commentId,
+      parentCommentId: parseInt(commentId),
       isDeleted: false
     },
     limit: parseInt(limit),
@@ -99,6 +109,14 @@ const getCommentReplies = asyncHandler(async (req, res) => {
         attributes: ['id', 'username', 'fullName', 'avatarUrl']
       }
     ]
+  });
+
+  // Count total replies
+  const count = await Comment.count({
+    where: {
+      parentCommentId: parseInt(commentId),
+      isDeleted: false
+    }
   });
 
   res.status(200).json(
@@ -143,17 +161,17 @@ const createComment = asyncHandler(async (req, res) => {
 
   // Create comment
   const comment = await Comment.create({
-    newsId,
+    newsId: parseInt(newsId),
     userId: req.user.id,
-    parentCommentId: parentCommentId || null,
+    parentCommentId: parentCommentId ? parseInt(parentCommentId) : null,
     content,
     likesCount: 0,
     isEdited: false,
     isDeleted: false
   });
 
-  // Reload with user data
-  await comment.reload({
+  // Get comment with user data
+  const commentWithUser = await Comment.findByPk(comment.id, {
     include: [
       {
         model: User,
@@ -164,7 +182,7 @@ const createComment = asyncHandler(async (req, res) => {
   });
 
   res.status(201).json(
-    new ApiResponse(201, comment, 'Comment created successfully')
+    new ApiResponse(201, commentWithUser, 'Comment created successfully')
   );
 });
 
@@ -197,8 +215,8 @@ const updateComment = asyncHandler(async (req, res) => {
   comment.isEdited = true;
   await comment.save();
 
-  // Reload with user data
-  await comment.reload({
+  // Get updated comment with user data
+  const updatedComment = await Comment.findByPk(id, {
     include: [
       {
         model: User,
@@ -209,7 +227,7 @@ const updateComment = asyncHandler(async (req, res) => {
   });
 
   res.status(200).json(
-    new ApiResponse(200, comment, 'Comment updated successfully')
+    new ApiResponse(200, updatedComment, 'Comment updated successfully')
   );
 });
 
@@ -234,7 +252,7 @@ const deleteComment = asyncHandler(async (req, res) => {
     throw ApiError.forbidden('You do not have permission to delete this comment');
   }
 
-  // Soft delete (mark as deleted instead of removing)
+  // Soft delete
   comment.isDeleted = true;
   comment.content = '[Comment deleted]';
   await comment.save();
@@ -245,7 +263,7 @@ const deleteComment = asyncHandler(async (req, res) => {
 });
 
 /**
- * Like/Unlike a comment
+ * Like a comment
  * POST /api/comments/:id/like
  */
 const likeComment = asyncHandler(async (req, res) => {
@@ -261,15 +279,15 @@ const likeComment = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('Cannot like deleted comment');
   }
 
-  // In a real app, you'd track who liked what in a separate table
-  // For now, we'll just increment/decrement the count
-  // This is simplified - you should create a comment_likes table
-  
+  // Increment like count
   comment.likesCount += 1;
   await comment.save();
 
   res.status(200).json(
-    new ApiResponse(200, { likesCount: comment.likesCount }, 'Comment liked successfully')
+    new ApiResponse(200, { 
+      commentId: comment.id,
+      likesCount: comment.likesCount 
+    }, 'Comment liked successfully')
   );
 });
 

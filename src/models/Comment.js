@@ -1,7 +1,6 @@
 const { DataTypes } = require('sequelize');
 const { sequelize } = require('../config/database');
 
-
 const Comment = sequelize.define('Comment', {
   id: {
     type: DataTypes.INTEGER,
@@ -57,7 +56,6 @@ const Comment = sequelize.define('Comment', {
 }, {
   tableName: 'comments',
   timestamps: true,
-  underscored: true,
   createdAt: 'created_at',
   updatedAt: 'updated_at',
   indexes: [

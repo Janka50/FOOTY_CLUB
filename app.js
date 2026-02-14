@@ -64,6 +64,7 @@ app.use('/api/teams', require('./src/Routes/teamRoutes'));
 app.use('/api/matches', require('./src/Routes/matchRoutes'));
 app.use('/api/news', require('./src/Routes/newsRoutes'));
 app.use('/api', require('./src/Routes/commentRoutes')); 
+app.use('/api/websocket', require('./src/Routes/websocket.routes'));
 
 
 // ERROR HANDLING
